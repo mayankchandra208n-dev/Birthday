@@ -157,6 +157,8 @@ body.music #mute{display:grid}
 #arena{position:relative;width:100%;height:300px;border:2px dashed #d9a8cf;border-radius:12px;background:rgba(255,255,255,.6);overflow:hidden;touch-action:manipulation;user-select:none;-webkit-user-select:none}
 .gh{position:absolute;font-size:36px;line-height:1;padding:6px;cursor:pointer;animation:gpop .25s cubic-bezier(.2,1.6,.4,1) both;transition:transform .22s,opacity .22s;user-select:none;-webkit-user-select:none}
 .gh.caught{transform:scale(1.8);opacity:0;pointer-events:none}
+.gh.wrong{animation:gwrong .35s both;pointer-events:none}
+@keyframes gwrong{0%{transform:translateX(0)}20%{transform:translateX(-7px)}40%{transform:translateX(7px)}60%{transform:translateX(-5px)}100%{transform:translateX(0) scale(.4);opacity:0}}
 @keyframes gpop{from{transform:scale(.2);opacity:0}to{transform:scale(1);opacity:1}}
 .gover{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(251,248,244,.94);padding:14px;text-align:center}
 .scwrap{position:relative;width:100%}
@@ -225,20 +227,20 @@ body.music #mute{display:grid}
 <!-- 2b: game -->
 <section class="screen" id="sg">
   <div class="win" style="width:min(92vw,400px)">
-    <div class="bar"><i></i><i></i><i></i><span class="ttl">CATCH_HEARTS.EXE</span></div>
+    <div class="bar"><i></i><i></i><i></i><span class="ttl">CATCH_PIGS.EXE</span></div>
     <div class="body" style="padding:16px 14px 18px">
       <div class="tag">• level 1 •</div>
-      <div class="script" style="font-size:30px">Catch 12 hearts to unlock your letter 💌</div>
+      <div class="script" style="font-size:30px">Catch 12 pigs 🐖 to unlock your letter 💌</div>
       <div class="gbar"><b id="gFill"></b></div>
       <div class="hint" id="gScore">0 / 12</div>
       <div id="arena">
         <div class="gover" id="gIntro">
-          <div class="small">Hearts will pop up — tap them fast before they vanish 💗</div>
+          <div class="small">Animals will pop up — tap only the pigs 🐖 before they vanish. Other animals don't count!</div>
           <button class="btn" id="gStart">▸ START</button>
         </div>
         <div class="gover hidden" id="gWin">
           <div class="big">LEVEL CLEAR! 🥳</div>
-          <div class="small">You caught them all, Baachu!<br>Your letter is unlocked 💌</div>
+          <div class="small">You caught all 12 pigs, Baachu!<br>Your letter is unlocked 💌</div>
           <button class="btn" id="gNext">▸ OPEN MY LETTER</button>
         </div>
       </div>
@@ -413,7 +415,7 @@ var screens=["s0","s1","s2","s3","s4","sc","sg"];
 var PREVIEW=/preview/.test(location.search)||/preview/.test(location.hash);
 function show(n){
   screens.forEach(function(id,i){$(id).classList.toggle("active",i===n)});
-  document.body.classList.toggle("music",n===2||n===3||n===6);
+  document.body.classList.toggle("music",n===2);
   window.scrollTo(0,0);
 }
 
@@ -431,7 +433,7 @@ function getDb(){
   })();
   return dbP;
 }
-var NMSG={opened:"👀 Baachu just opened your birthday website!",said_yes:"🥰 She tapped YES!",started:"🎀 She pressed START and is looking at the memories",reached_game:"🎮 She reached the heart game",cleared_game:"🏆 She cleared the heart game!",reached_letter:"💌 She reached your letter",reached_cake:"🎂 She reached the cake!",blew_candles:"🕯️ She blew out the candles! 🥳",reached_promise:"🤞 She reached the promise page",promised:"🥳 SHE PROMISED! 🫶",scratched:"🎁 She scratched the gift and revealed the certificate!",saved_certificate:"📸 She saved the promise certificate"};
+var NMSG={opened:"👀 Baachu just opened your birthday website!",said_yes:"🥰 She tapped YES!",started:"🎀 She pressed START and is looking at the memories",reached_game:"🎮 She reached the pig game",cleared_game:"🏆 She cleared the pig game!",reached_letter:"💌 She reached your letter",reached_cake:"🎂 She reached the cake!",blew_candles:"🕯️ She blew out the candles! 🥳",reached_promise:"🤞 She reached the promise page",promised:"🥳 SHE PROMISED! 🫶",scratched:"🎁 She scratched the gift and revealed the certificate!",saved_certificate:"📸 She saved the promise certificate"};
 function notify(ev){
   if(!NTFY_TOPIC||PREVIEW)return Promise.resolve(false);
   try{
@@ -621,28 +623,33 @@ $("start").addEventListener("click",function(e){
 });
 $("next").addEventListener("click",function(){
   if(mi<IMG.length-1){mi++;renderMem();burst(innerWidth/2,innerHeight*.3,18,6)}
-  else{show(6);track("reached_game")}
+  else{fadeTo(0,900,function(){song.pause()});show(6);track("reached_game")}
 });
 
 /* ---------- screen 6: catch-the-hearts game ---------- */
 var GOAL=12,gScore=0,gPlaying=false,gIv=0,gSkipT=0;
 function gUpdate(){$("gScore").textContent=gScore+" / "+GOAL;$("gFill").style.width=Math.min(100,gScore/GOAL*100)+"%"}
+var ANIMALS=["🐱","🐔","🐷","🐒","🐦‍⬛","🐮","🪿","🐦","🦁","🐸","🐯","🐻‍❄️","🦇","🐺","🦅"],sincePig=0;
 function spawnHeart(){
   var a=$("arena"),h=document.createElement("span");
-  h.className="gh";h.textContent=["💗","💖","💕","🩷","🎀"][(Math.random()*5)|0];
+  var pig=(sincePig>=2)||Math.random()<.42;
+  sincePig=pig?0:sincePig+1;
+  h.className="gh";h.textContent=pig?"🐖":ANIMALS[(Math.random()*ANIMALS.length)|0];
   h.style.left=(Math.random()*Math.max(10,a.clientWidth-56))+"px";
   h.style.top=(Math.random()*Math.max(10,a.clientHeight-56))+"px";
   h.addEventListener("pointerdown",function(e){
     e.preventDefault();
     if(!gPlaying||h.dataset.c)return;
-    h.dataset.c="1";h.classList.add("caught");
+    h.dataset.c="1";
+    if(!pig){h.classList.add("wrong");setTimeout(function(){h.remove()},360);return}
+    h.classList.add("caught");
     var r=h.getBoundingClientRect();burst(r.left+r.width/2,r.top+r.height/2,10,5);
     setTimeout(function(){h.remove()},250);
     gScore++;gUpdate();
     if(gScore>=GOAL)gClear();
   });
   a.appendChild(h);
-  setTimeout(function(){if(h.parentNode&&!h.dataset.c)h.remove()},1700);
+  setTimeout(function(){if(h.parentNode&&!h.dataset.c)h.remove()},1900);
 }
 function gClear(){
   gPlaying=false;clearInterval(gIv);clearTimeout(gSkipT);
@@ -653,7 +660,7 @@ function gClear(){
 }
 $("gStart").addEventListener("click",function(){
   $("gIntro").classList.add("hidden");gScore=0;gUpdate();gPlaying=true;
-  spawnHeart();gIv=setInterval(spawnHeart,520);
+  sincePig=0;spawnHeart();gIv=setInterval(spawnHeart,560);
   gSkipT=setTimeout(function(){$("gSkip").classList.remove("hidden")},30000);
 });
 function toLetter(){clearInterval(gIv);gPlaying=false;show(3);typeLetter();track("reached_letter")}
