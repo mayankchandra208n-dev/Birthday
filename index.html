@@ -148,6 +148,20 @@ canvas#cf{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-in
 body.music #mute{display:grid}
 #mute.off{color:#b9a3b4;background:#f3ecf1}
 #mute.off::after{content:"";position:absolute;width:26px;height:2.5px;background:var(--ink);transform:rotate(-45deg);border-radius:2px}
+/* lock + game */
+.btn.locked{opacity:.55;filter:grayscale(.35);cursor:not-allowed;box-shadow:0 5px 0 #b58aa8}
+.shake{animation:shk .4s}
+@keyframes shk{0%,100%{transform:none}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.gbar{width:100%;height:14px;border:2.5px solid var(--ink);border-radius:8px;background:#fff;overflow:hidden}
+.gbar b{display:block;height:100%;width:0;background:linear-gradient(90deg,#ff8fd8,#e255bd);transition:width .25s}
+#arena{position:relative;width:100%;height:300px;border:2px dashed #d9a8cf;border-radius:12px;background:rgba(255,255,255,.6);overflow:hidden;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.gh{position:absolute;font-size:36px;line-height:1;padding:6px;cursor:pointer;animation:gpop .25s cubic-bezier(.2,1.6,.4,1) both;transition:transform .22s,opacity .22s;user-select:none;-webkit-user-select:none}
+.gh.caught{transform:scale(1.8);opacity:0;pointer-events:none}
+@keyframes gpop{from{transform:scale(.2);opacity:0}to{transform:scale(1);opacity:1}}
+.gover{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(251,248,244,.94);padding:14px;text-align:center}
+.scwrap{position:relative;width:100%}
+#scratch{position:absolute;inset:0;border-radius:10px;touch-action:none;cursor:grab;z-index:5}
+.afterbox{display:flex;flex-direction:column;align-items:center;gap:14px;width:100%;animation:pop .6s cubic-bezier(.2,1.3,.4,1) both}
 #foot{position:relative;z-index:2;text-align:center;font-family:var(--px);font-size:6px;letter-spacing:.14em;color:#b27ba5;padding:0 0 22px;line-height:2}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01s!important;animation-iteration-count:1!important}}
 </style>
@@ -189,7 +203,7 @@ body.music #mute{display:grid}
       <div class="today" id="today">TODAY IS YOUR DAY 🥳</div>
       <p class="small" id="sub">Today is your special day, and I wanted to make it even more special.<br>So I made this little surprise, just for you 🥰</p>
       <button class="btn" id="start">▸ PRESS START</button>
-      <div class="hint">tap to continue</div>
+      <div class="hint" id="h1">tap to continue</div>
     </div>
   </div>
 </section>
@@ -206,6 +220,31 @@ body.music #mute{display:grid}
   </div>
   <button class="btn" id="next">▸ NEXT MEMORY</button>
   <div class="hint" id="memH">tap to continue</div>
+</section>
+
+<!-- 2b: game -->
+<section class="screen" id="sg">
+  <div class="win" style="width:min(92vw,400px)">
+    <div class="bar"><i></i><i></i><i></i><span class="ttl">CATCH_HEARTS.EXE</span></div>
+    <div class="body" style="padding:16px 14px 18px">
+      <div class="tag">• level 1 •</div>
+      <div class="script" style="font-size:30px">Catch 12 hearts to unlock your letter 💌</div>
+      <div class="gbar"><b id="gFill"></b></div>
+      <div class="hint" id="gScore">0 / 12</div>
+      <div id="arena">
+        <div class="gover" id="gIntro">
+          <div class="small">Hearts will pop up — tap them fast before they vanish 💗</div>
+          <button class="btn" id="gStart">▸ START</button>
+        </div>
+        <div class="gover hidden" id="gWin">
+          <div class="big">LEVEL CLEAR! 🥳</div>
+          <div class="small">You caught them all, Baachu!<br>Your letter is unlocked 💌</div>
+          <button class="btn" id="gNext">▸ OPEN MY LETTER</button>
+        </div>
+      </div>
+      <button class="btn ghost hidden" id="gSkip" style="font-size:8px;padding:10px 12px">skip game →</button>
+    </div>
+  </div>
 </section>
 
 <!-- 3: letter -->
@@ -356,8 +395,9 @@ body.music #mute{display:grid}
 "use strict";
 /* ===== settings you can change ===== */
 var HER="Baachu", PNAME="Rafiya", ME="Mayank";
+var LOCK=false;  // true = Press Start stays locked until 12:00 AM 24 Nov IST
 var NTFY_TOPIC="mb-0d75d9e26af97981";  // for the self-hosted copy: a secret ntfy.sh topic, so Mayank gets a phone notification
-var WA_NUMBER="";   // e.g. "919876543210" (country code + number, no +). Adds a "Reply to Mayank" WhatsApp button at the end.
+var WA_NUMBER="919835239955";   // e.g. "919876543210" (country code + number, no +). Adds a "Reply to Mayank" WhatsApp button at the end.
 var CAPTIONS=[["pretty in pink & gold ✨🎀",""],["that smile 🥰",""],["mwah 😘💋",""],["these eyes 🥰💋","your eyes always made me fall for you"],["main character vibes 🖤😋",""],["Outfit check: APPROVED! 🥳","this dress looks sooo good on you 🥰🎀"]];
 var LETTER=[
  "Hey Baachuuuu,",
@@ -369,10 +409,11 @@ var LETTER=[
 /* ===================================== */
 
 var $=function(id){return document.getElementById(id)};
-var screens=["s0","s1","s2","s3","s4","sc"];
+var screens=["s0","s1","s2","s3","s4","sc","sg"];
+var PREVIEW=/preview/.test(location.search)||/preview/.test(location.hash);
 function show(n){
   screens.forEach(function(id,i){$(id).classList.toggle("active",i===n)});
-  document.body.classList.toggle("music",n===2||n===3);
+  document.body.classList.toggle("music",n===2||n===3||n===6);
   window.scrollTo(0,0);
 }
 
@@ -390,9 +431,9 @@ function getDb(){
   })();
   return dbP;
 }
-var NMSG={opened:"👀 Baachu just opened your birthday website!",said_yes:"🥰 She tapped YES!",started:"🎀 She pressed START and is looking at the memories",reached_letter:"💌 She reached your letter",reached_cake:"🎂 She reached the cake!",blew_candles:"🕯️ She blew out the candles! 🥳",reached_promise:"🤞 She reached the promise page",promised:"🥳 SHE PROMISED! 🫶",saved_certificate:"📸 She saved the promise certificate"};
+var NMSG={opened:"👀 Baachu just opened your birthday website!",said_yes:"🥰 She tapped YES!",started:"🎀 She pressed START and is looking at the memories",reached_game:"🎮 She reached the heart game",cleared_game:"🏆 She cleared the heart game!",reached_letter:"💌 She reached your letter",reached_cake:"🎂 She reached the cake!",blew_candles:"🕯️ She blew out the candles! 🥳",reached_promise:"🤞 She reached the promise page",promised:"🥳 SHE PROMISED! 🫶",scratched:"🎁 She scratched the gift and revealed the certificate!",saved_certificate:"📸 She saved the promise certificate"};
 function notify(ev){
-  if(!NTFY_TOPIC||/preview/.test(location.search))return Promise.resolve(false);
+  if(!NTFY_TOPIC||PREVIEW)return Promise.resolve(false);
   try{
     return fetch("https://ntfy.sh/"+NTFY_TOPIC,{method:"POST",body:NMSG[ev]||ev,mode:"no-cors"}).then(function(){return true},function(){return false});
   }catch(e){return Promise.resolve(false)}
@@ -492,11 +533,17 @@ yes.addEventListener("click",function(e){
 
 /* ---------- screen 1: birthday ---------- */
 var BDAY=Date.UTC(2026,10,23,18,30); // 24 Nov 2026, 00:00 IST
+function isLocked(){return LOCK&&Date.now()<BDAY&&!PREVIEW}
 function dayText(){
-  var now=Date.now(),t=$("today"),sub=$("sub");
+  var now=Date.now(),t=$("today"),sub=$("sub"),st=$("start"),h1=$("h1");
+  if(isLocked()){st.classList.add("locked");st.textContent="🔒 LOCKED";h1.textContent="opens at 12:00 AM on 24 Nov 🎀"}
+  else if(st.classList.contains("locked")){
+    st.classList.remove("locked");st.textContent="▸ PRESS START";h1.textContent="tap to continue";
+    burst(innerWidth/2,innerHeight*.4,80,11);rain(3);
+  }
   if(now<BDAY){
-    var d=BDAY-now,days=Math.floor(d/864e5),hrs=Math.floor(d%864e5/36e5),mins=Math.floor(d%36e5/6e4);
-    t.innerHTML="YOUR DAY IS ALMOST HERE 🎀<br>24 NOV · in "+(days?days+"d ":"")+hrs+"h "+mins+"m";
+    var d=BDAY-now,days=Math.floor(d/864e5),hrs=Math.floor(d%864e5/36e5),mins=Math.floor(d%36e5/6e4),secs=Math.floor(d%6e4/1e3);
+    t.innerHTML="YOUR DAY IS ALMOST HERE 🎀<br>24 NOV · in "+(days?days+"d ":"")+hrs+"h "+mins+"m "+secs+"s";
     sub.innerHTML="Your special day is almost here, and I wanted to make it even more special.<br>So I made this little surprise, just for you 🥰";
   }else if(now<BDAY+864e5){
     t.textContent="TODAY IS YOUR DAY 🥳";
@@ -507,7 +554,7 @@ function dayText(){
 }
 var hbDone=false;
 function birthdayScreen(){
-  dayText();setInterval(dayText,30000);
+  dayText();setInterval(dayText,1000);
   balloons();
   if(!hbDone){
     hbDone=true;
@@ -565,16 +612,53 @@ function renderMem(){
   $("memT").textContent="Memory "+(mi+1)+" of "+IMG.length;
   $("memF").textContent="MEMORY_0"+(mi+1)+(isV?".MP4":".PNG");
   Array.prototype.forEach.call($("seg").children,function(b,i){b.classList.toggle("on",i<=mi)});
-  $("next").textContent=(mi===IMG.length-1)?"▸ READ LETTER":"▸ NEXT MEMORY";
+  $("next").textContent=(mi===IMG.length-1)?"▸ ONE LITTLE GAME 🎮":"▸ NEXT MEMORY";
 }
 $("start").addEventListener("click",function(e){
+  if(isLocked()){var b=$("start");b.classList.remove("shake");void b.offsetWidth;b.classList.add("shake");return}
   burst(e.clientX||innerWidth/2,e.clientY||innerHeight/2,30);
   mi=0;renderMem();show(2);startMusic();track("started");
 });
 $("next").addEventListener("click",function(){
   if(mi<IMG.length-1){mi++;renderMem();burst(innerWidth/2,innerHeight*.3,18,6)}
-  else{show(3);typeLetter();track("reached_letter")}
+  else{show(6);track("reached_game")}
 });
+
+/* ---------- screen 6: catch-the-hearts game ---------- */
+var GOAL=12,gScore=0,gPlaying=false,gIv=0,gSkipT=0;
+function gUpdate(){$("gScore").textContent=gScore+" / "+GOAL;$("gFill").style.width=Math.min(100,gScore/GOAL*100)+"%"}
+function spawnHeart(){
+  var a=$("arena"),h=document.createElement("span");
+  h.className="gh";h.textContent=["💗","💖","💕","🩷","🎀"][(Math.random()*5)|0];
+  h.style.left=(Math.random()*Math.max(10,a.clientWidth-56))+"px";
+  h.style.top=(Math.random()*Math.max(10,a.clientHeight-56))+"px";
+  h.addEventListener("pointerdown",function(e){
+    e.preventDefault();
+    if(!gPlaying||h.dataset.c)return;
+    h.dataset.c="1";h.classList.add("caught");
+    var r=h.getBoundingClientRect();burst(r.left+r.width/2,r.top+r.height/2,10,5);
+    setTimeout(function(){h.remove()},250);
+    gScore++;gUpdate();
+    if(gScore>=GOAL)gClear();
+  });
+  a.appendChild(h);
+  setTimeout(function(){if(h.parentNode&&!h.dataset.c)h.remove()},1700);
+}
+function gClear(){
+  gPlaying=false;clearInterval(gIv);clearTimeout(gSkipT);
+  Array.prototype.slice.call($("arena").querySelectorAll(".gh")).forEach(function(n){n.remove()});
+  $("gWin").classList.remove("hidden");$("gSkip").classList.add("hidden");
+  burst(innerWidth/2,innerHeight*.4,100,12);rain(3);
+  track("cleared_game");
+}
+$("gStart").addEventListener("click",function(){
+  $("gIntro").classList.add("hidden");gScore=0;gUpdate();gPlaying=true;
+  spawnHeart();gIv=setInterval(spawnHeart,520);
+  gSkipT=setTimeout(function(){$("gSkip").classList.remove("hidden")},30000);
+});
+function toLetter(){clearInterval(gIv);gPlaying=false;show(3);typeLetter();track("reached_letter")}
+$("gNext").addEventListener("click",toLetter);
+$("gSkip").addEventListener("click",toLetter);
 
 /* ---------- screen 3: letter ---------- */
 var typing=false,skip=false,letterDone=false;
@@ -717,6 +801,41 @@ async function makeCert(ds){
   g.fillStyle="#b27ba5";g.font="18px "+PX;g.fillText("MADE WITH \u2665 BY "+ME.toUpperCase(),cx,H-70);
   return new Promise(function(res){c.toBlob(res,"image/png")});
 }
+function setupScratch(){
+  var w=$("scwrap"),c=$("scratch");if(!w||!c)return;
+  requestAnimationFrame(function(){
+    var r=w.getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,2),W=r.width,H=r.height;
+    c.width=Math.round(W*dpr);c.height=Math.round(H*dpr);c.style.width=W+"px";c.style.height=H+"px";
+    var g=c.getContext("2d");g.scale(dpr,dpr);
+    var gr=g.createLinearGradient(0,0,W,H);gr.addColorStop(0,"#ffc2ec");gr.addColorStop(.5,"#e255bd");gr.addColorStop(1,"#ff8fd8");
+    g.fillStyle=gr;g.fillRect(0,0,W,H);
+    for(var i=0;i<46;i++){g.fillStyle="rgba(255,255,255,"+(.25+Math.random()*.5)+")";g.beginPath();g.arc(Math.random()*W,Math.random()*H,1+Math.random()*2.6,0,7);g.fill()}
+    g.textAlign="center";g.fillStyle="#fff";
+    g.font="38px sans-serif";g.fillText("🎁",W/2,H/2-6);
+    g.font="10px 'Press Start 2P',monospace";g.fillText("SCRATCH ME",W/2,H/2+26);
+    g.font="8px 'Press Start 2P',monospace";g.fillText("♥ a gift for you ♥",W/2,H/2+48);
+    var drawing=false,done=false,last=null,n=0;
+    function pt(e){var b=c.getBoundingClientRect();return{x:e.clientX-b.left,y:e.clientY-b.top}}
+    function scr(a,b){g.globalCompositeOperation="destination-out";g.lineWidth=36;g.lineCap="round";g.lineJoin="round";g.beginPath();g.moveTo(a.x,a.y);g.lineTo(b.x,b.y);g.stroke()}
+    function check(){
+      if(done)return;
+      var d=g.getImageData(0,0,c.width,c.height).data,clear=0,tot=0;
+      for(var k=3;k<d.length;k+=64){tot++;if(d[k]<40)clear++}
+      if(clear/tot>.45)reveal();
+    }
+    function reveal(){
+      if(done)return;done=true;
+      c.style.transition="opacity .6s";c.style.opacity="0";c.style.pointerEvents="none";
+      setTimeout(function(){c.style.display="none"},650);
+      $("scHint").classList.add("hidden");$("after").classList.remove("hidden");
+      burst(innerWidth/2,innerHeight*.4,110,12);rain(4);track("scratched");
+      $("after").scrollIntoView({block:"center",behavior:"smooth"});
+    }
+    c.addEventListener("pointerdown",function(e){e.preventDefault();drawing=true;try{c.setPointerCapture(e.pointerId)}catch(x){}last=pt(e);scr(last,last)});
+    c.addEventListener("pointermove",function(e){if(!drawing)return;e.preventDefault();var p=pt(e);scr(last,p);last=p;if(++n%12===0)check()});
+    ["pointerup","pointercancel"].forEach(function(ev){c.addEventListener(ev,function(){drawing=false;check()})});
+  });
+}
 var dlP=null;
 function getDl(){
   if(!dlP)dlP=(async function(){try{return (window.claude&&window.claude.use)?await window.claude.use("downloads"):null}catch(e){return null}})();
@@ -724,20 +843,23 @@ function getDl(){
 }
 $("promise").addEventListener("click",function(e){
   var now=new Date(),ds=now.toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric",timeZone:"Asia/Kolkata"});
-  var msg=encodeURIComponent("I promise, "+ME+" 🫶 — "+PNAME);
-  var wa=WA_NUMBER?'<a class="btn" style="width:100%;text-align:center" target="_blank" rel="noopener" href="https://wa.me/'+WA_NUMBER+'?text='+msg+'">💬 TELL '+ME.toUpperCase()+'</a>':'';
+  var msg=encodeURIComponent("Thank you for everything, "+ME+" 🥰 I promise 🫶 — "+HER);
+  var wa=WA_NUMBER?'<a class="btn" style="width:100%;text-align:center" target="_blank" rel="noopener" href="https://wa.me/'+WA_NUMBER+'?text='+msg+'">💬 REPLY TO '+ME.toUpperCase()+'</a>':'';
   $("prBody").innerHTML=
    '<div class="stamp">✓ PROMISE SAVED</div>'+
    '<div class="script" style="font-size:36px">It\'s a promise 🫶</div>'+
-   '<div class="cert"><div class="tag">signed by</div>'+
+   '<div class="scwrap" id="scwrap"><div class="cert"><div class="tag">signed by</div>'+
    '<div class="big" style="font-size:12px">'+PNAME.toUpperCase()+' ✕ '+ME.toUpperCase()+'</div>'+
    '<div class="small" style="max-width:none">Always together, no matter how far apart.<br>Only mine, my best friend, forever.</div>'+
-   '<div class="hint">'+ds+'</div></div>'+
+   '<div class="hint">'+ds+'</div></div><canvas id="scratch"></canvas></div>'+
+   '<div class="hint" id="scHint">🎁 scratch the gift to reveal your certificate</div>'+
+   '<div class="afterbox hidden" id="after">'+
    '<button class="btn hidden" id="saveCert" style="width:100%">📸 SAVE &amp; SEND TO '+ME.toUpperCase()+'</button>'+
    '<div class="small" id="shotHint" style="font-size:11px;max-width:none">📸 Take a screenshot of this page and send it to '+ME+' 🫶</div>'+
    wa+
    '<div class="script" style="font-size:26px">Happy Birthday, '+HER+' 🎂</div>'+
-   '<button class="btn ghost" id="replay">↺ WATCH AGAIN</button>';
+   '<button class="btn ghost" id="replay">↺ WATCH AGAIN</button></div>';
+  setupScratch();
   burst(innerWidth/2,innerHeight*.45,120,13);rain(6);
   track("promised");
   $("replay").addEventListener("click",function(){location.reload()});
